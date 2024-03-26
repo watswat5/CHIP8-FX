@@ -29,6 +29,8 @@ public class CHIP8 {
     /**Display area.*/
     boolean[][] display;
 
+    private int lastTime;
+
     public CHIP8() {
         //Init all variables
         ram = new byte[4096];
@@ -48,5 +50,22 @@ public class CHIP8 {
         for (int i = 9; i < charset.length; i++) {
             ram[i] = (byte) (charset[i] & 0xFF);
         }
+
+        //Init timer variable
+        lastTime = System.currentTimeMillis();
+    }
+
+    public void step() {
+        //Decrement sound and delay timers
+        if (System.currentTimeMillis() - lastTime > 16) {
+            dt = dt > 0 ? dt - 1 : 0;
+            st = st > 0 ? st - 1 : 0;
+        }
+
+        //Fetch instruction
+        byte low = ram[pc];
+        byte high = ram[pc + 1];
+
+        //
     }
 }
