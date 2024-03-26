@@ -171,10 +171,10 @@ public class CHIP8 {
                 case 5: //SUB
                     if (gpr[high & 0x0F] > gpr[low >>> 4]) {
                         gpr[0xF] = 1 & 0xFF;
-                        gpr[hgih & 0x0F] = (gpr[high & 0x0F] - gpr[low >>> 4]) & 0xFF;
+                        gpr[high & 0x0F] = (gpr[high & 0x0F] - gpr[low >>> 4]) & 0xFF;
                     } else {
                         gpr[0xF] = 0 & 0x00;
-                        gpr[hgih & 0x0F] = 0 & 0x00;
+                        gpr[high & 0x0F] = 0 & 0x00;
                     }
                     break;
                 case 6: //SHR
@@ -191,7 +191,7 @@ public class CHIP8 {
                     }
                     break;
                 case 0xE:
-                    if (gpr[high & 0x0F] & 0x80 > 0) {
+                    if (gpr[high & 0x0F] >>> 7 > 0) {
                         gpr[0xF] = 1 & 0xFF;
                     } else {
                         gpr[0xF] = 0 & 0x00;
