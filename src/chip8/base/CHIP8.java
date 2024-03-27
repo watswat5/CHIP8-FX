@@ -140,7 +140,8 @@ public class CHIP8 extends Application{
         //Decode Instruction
         String lower = String.format("%02X", low);
         String upper = String.format("%02X", high);
-        System.out.println(pc + ": " + upper.substring(upper.length() - 2, upper.length()) + " " + lower.substring(lower.length() - 2, lower.length()) + "\n");
+        //System.out.println(pc + ": " + upper.substring(upper.length() - 2, upper.length()) + " " + lower.substring(lower.length() - 2, lower.length()) + "\n");
+
         //00 high
         if (high == 0) {
             if ((low & 0xFF) == 0xE0) { //CLS
@@ -156,13 +157,14 @@ public class CHIP8 extends Application{
         }
 
         //JP
-        if (high >>> 4 == 1) {
+        if ((high & 0xF0) == 0x0010) {
+            //System.out.println("jmp: " + (low + (high << 8) & 0x0FFF));
             pc = low + (high << 8) & 0x0FFF;
             return;
         }
 
         //CALL
-        if (high >>> 4 == 2) {
+        if ((high  & 0xFF) >>> 4 == 2) {
             sp++;
             stack[sp] = pc;
             pc = low + (high << 8) & 0x0FFF;
@@ -170,7 +172,7 @@ public class CHIP8 extends Application{
         }
 
         //Skip Equal Literal
-        if (high >>> 4 == 3) {
+        if ((high  & 0xFF) >>> 4 == 3) {
             if (gpr[high & 0x0F] == low) {
                 pc += 4;
             } else {
@@ -180,7 +182,7 @@ public class CHIP8 extends Application{
         }
 
         //Skip Not Equal
-        if (high >>> 4 == 4) {
+        if ((high  & 0xFF) >>> 4 == 4) {
             if (gpr[high & 0x0F] != low) {
                 pc += 4;
             } else {
@@ -190,7 +192,7 @@ public class CHIP8 extends Application{
         }
 
         //Skip Equal Register
-        if (high >>> 4 == 5) {
+        if ((high  & 0xFF) >>> 4 == 5) {
             if (gpr[high & 0x0F] == gpr[low >>> 4]) {
                 pc += 4;
             } else {
@@ -200,27 +202,27 @@ public class CHIP8 extends Application{
         }
 
         //Load Literal
-        if (high >>> 4 == 6) {
+        if ((high  & 0xFF) >>> 4 == 6) {
             gpr[high & 0x0F] = low;
             pc+=2;
             return;
         }
 
         //Add Literal
-        if (high >>> 4 == 7) {
+        if ((high  & 0xFF) >>> 4 == 7) {
             gpr[high & 0x0F] += low;
             pc+=2;
             return;
         }
 
         //Subset Operations
-        if (high >>> 4 == 8) {
-            subset8(low, high);
+        if ((high  & 0xFF) >>> 4 == 8) {
+            subset8(low, (high  & 0xFF));
             return;
         }
 
         //Skip NE
-        if (high >>> 4 == 9) {
+        if ((high  & 0xFF) >>> 4 == 9) {
             if (gpr[high & 0x0F] != gpr[low >>> 4]) {
                 pc += 4;
             } else {
@@ -237,26 +239,26 @@ public class CHIP8 extends Application{
         }
 
         //Jump Relative
-        if (high >>> 4 == 0xB) {
+        if ((high  & 0xFF) >>> 4 == 0xB) {
             pc = gpr[0] + ((low + (high << 8)) & 0x0FFF);
             return;
         }
 
         //RND
-        if (high >>> 4 == 0xC) {
+        if ((high  & 0xFF) >>> 4 == 0xC) {
             gpr[high & 0xF] = ((int)(Math.random() * 256) & 0xFF) & low;
             pc+=2;
             return;
         }
 
         //Draw
-        if (high >>> 4 == 0xD) {
+        if ((high  & 0xFF) >>> 4 == 0xD) {
             draw(low, high);
             return;
         }
 
         //Keypad Skip
-        if (high >>> 4 == 0xE) {
+        if ((high  & 0xFF) >>> 4 == 0xE) {
             //Skip Equal
             if (low == 0x9E) {
                 if (numpad[high & 0x0F]) {
@@ -277,8 +279,8 @@ public class CHIP8 extends Application{
         }
 
         //Subset F
-        if (high >>> 4 == 0xF) {
-            subsetF(low, high);
+        if ((high  & 0xFF) >>> 4 == 0xF) {
+            subsetF(low, (high  & 0xFF));
             return;
         }
     }
@@ -337,11 +339,20 @@ public class CHIP8 extends Application{
         return;
     }
 
+    public void debugDrawSprite(int address, int size) {
+        System.out.println("Address: " + I);
+        for (int i = 0; i < size; i++) {
+            //System.out.println(String.format("%8s", Integer.toBinaryString(ram[address + i])).replace(' ', '0'));
+            System.out.println(ram[address + i]);
+        }
+        System.out.println();
+    }
+
     public void draw(int low, int high) {
         int size = low & 0x0F;
         int xPos = gpr[high & 0x0F];
         int yPos = gpr[low >>> 4];
-
+        debugDrawSprite(I, size);
         //Lines, starting at address in I
         for (int line = 0; line < size; line++) {
             //Wrap y coord
