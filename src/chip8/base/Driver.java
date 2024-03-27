@@ -1,10 +1,14 @@
 package chip8.base;
 
+import javafx.application.Application;
+
 public class Driver {
     public static void main(String[] args) {
-        int low = (0xEE);
-        int high = (0xFF);
-        //System.out.println(Integer.toBinaryString());
-        CHIP8 c8 = new CHIP8("1-chip8-logo.ch8");
-    }
+        try {
+            Application.launch(CHIP8.class, args);
+        } catch (Exception e) {
+            System.err.println(e);
+            System.exit(1);
+        } // try
+    } // main
 }
