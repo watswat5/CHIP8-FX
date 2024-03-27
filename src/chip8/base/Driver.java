@@ -5,6 +5,6 @@ public class Driver {
         int low = (0xEE);
         int high = (0xFF);
         //System.out.println(Integer.toBinaryString());
-        CHIP8 c8 = new CHIP8();
+        CHIP8 c8 = new CHIP8("1-chip8-logo.ch8");
     }
 }
