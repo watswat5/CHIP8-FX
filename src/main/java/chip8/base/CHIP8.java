@@ -73,7 +73,7 @@ public class CHIP8 extends Application{
 
     public void start(Stage stage) {
         reset();
-        rom = "3-corax+.ch8";
+        rom = "2-ibm-logo (1).ch8";
         frequency = 100;
         try {
             //loadRom(rom);
@@ -86,7 +86,7 @@ public class CHIP8 extends Application{
             //  Load 0 into V3          0x6000
             //Jump to 0x202             0x1202
             loadRom(rom);
-            pokeRAM(0x200, new int[]{0x63,0x00, 0x00,0xE0, 0xF3,0x29, 0xD0,0x05, 0x73,0x01, 0x43,0x10, 0x63,0x00, 0x12,0x02});
+            //pokeRAM(0x200, new int[]{0x63,0x00, 0x00,0xE0, 0xF3,0x29, 0xD0,0x05, 0x73,0x01, 0x43,0x10, 0x63,0x00, 0x12,0x02});
             //System.out.println(dumpRom(1024));
         } catch (FileNotFoundException ex) {
             throw new RuntimeException("File not found!");
@@ -166,7 +166,10 @@ public class CHIP8 extends Application{
                 pc = stack[sp--];
                 return;
             } else {
-                throw new UnsupportedOperationException("Invalid OP-Code: " + (low + (high << 8) & 0xFFFF));
+                System.out.println("BAD-OP at " + pc + ": " + (low + (high << 8) & 0xFFFF));
+                paused = true;
+                System.out.println(dumpRom(4096 - 0x200));
+                
             }
         }
 
@@ -197,9 +200,7 @@ public class CHIP8 extends Application{
 
         //Skip Not Equal
         if ((high  & 0xFF) >>> 4 == 4) {
-            //System.out.println(gpr[high & 0x0F]  + " " + (low & 0xFF));
             if (gpr[high & 0x0F] != (low & 0xFF)) {
-                System.out.println("Skipping " + (pc + 2));
                 pc += 4;
             } else {
                 pc += 2;
@@ -248,9 +249,10 @@ public class CHIP8 extends Application{
             return;
         }
 
-        //Load Immediate
+        //Load Immediate into I
         if ((high & 0xFF) >>> 4 == 0x0A) {
-            I = (((low & 0xFF) & ((high << 8) | 0xFFF))) & 0x0FFF;
+            System.out.println("Setting I:" + (((high & 0x0F) << 8) + (low & 0xFF)));
+            I = (((high & 0x0F) << 8) + (low & 0xFF));
             pc+=2;
             return;
         }
@@ -381,10 +383,10 @@ public class CHIP8 extends Application{
     }
 
     public void draw(int low, int high) {
-        System.out.println((high & 0x0F) + ", " + ((low >>> 4) & 0x0F));
+        //System.out.println((high & 0x0F) + ", " + ((low >>> 4) & 0x0F));
         int size = low & 0x0F;
         int xPos = gpr[high & 0x0F];
-        int yPos = gpr[low >>> 4];
+        int yPos = gpr[((low >>> 4) & 0x0F)];
         //debugDrawSprite(I, size);
 
         //Lines, starting at address in I
@@ -517,14 +519,14 @@ public class CHIP8 extends Application{
     }
 
     public String dumpRom(int length) {
-        if (length < 0x200) {
-            throw new IllegalArgumentException("Must dump ROM after 0x1FF!");
-        }
         String t_string = "";
-        for(int i = 0x200; i < length; i+=2) {
-            String lower = String.format("%02X", ram[i]);
-            String upper = String.format("%02X", ram[i + 1]);
-            t_string += lower.substring(lower.length() - 2, lower.length()) + " " + upper.substring(upper.length() - 2, upper.length()) + "\n";
+        for(int i = 0; i < length; i+=2) {
+            String lower = String.format("%02X", ram[i + 0x200]);
+            String upper = String.format("%02X", ram[i + 1 + 0x200]);
+            t_string += lower.substring(lower.length() - 2, lower.length()) + " " + upper.substring(upper.length() - 2, upper.length()) + "\t";
+            if (i % 20 == 0) {
+                t_string += "\n";
+            }
             //System.out.println(Integer.toHexString(ram[i]) + " " + Integer.toHexString(ram[i + 1]));
         }
         return t_string;
@@ -535,9 +537,9 @@ public class CHIP8 extends Application{
     }
 
     private void clearDisplay() {
-        for (boolean[] line : display) {
-            for (boolean pixel : line) {
-                pixel = false;
+        for (int row = 0; row < 32; row++) {
+            for (int column = 0; column < 64; column++) {
+                display[column][row] = false;
             }
         }
         updateDisplay();
@@ -552,6 +554,10 @@ public class CHIP8 extends Application{
                 numpad[i] = true;
             }
         }
+
+        if (ch.compareTo("p") == 0) {
+            paused = !paused;
+        }
     }
 
     private void keyReleased(KeyEvent evt){
@@ -562,10 +568,6 @@ public class CHIP8 extends Application{
                 //Key pressed
                 numpad[i] = false;
             }
-        }
-
-        if (ch.compareTo("p") == 0) {
-            paused = !paused;
         }
     }
 }
