@@ -73,10 +73,20 @@ public class CHIP8 extends Application{
 
     public void start(Stage stage) {
         reset();
-        rom = "1-chip8-logo.ch8";
-        frequency = 15;
+        rom = "3-corax+.ch8";
+        frequency = 100;
         try {
+            //loadRom(rom);
+            //Load 0 into V3            0x6000
+            //Clear display             0x00E0
+            //Set I to digit for V3     0xF329
+            //Draw                      0xD005
+            //Add 1 to V3               0x7301
+            //Skip next if V3 != 16     0x4310
+            //  Load 0 into V3          0x6000
+            //Jump to 0x202             0x1202
             loadRom(rom);
+            pokeRAM(0x200, new int[]{0x63,0x00, 0x00,0xE0, 0xF3,0x29, 0xD0,0x05, 0x73,0x01, 0x43,0x10, 0x63,0x00, 0x12,0x02});
             //System.out.println(dumpRom(1024));
         } catch (FileNotFoundException ex) {
             throw new RuntimeException("File not found!");
@@ -85,7 +95,7 @@ public class CHIP8 extends Application{
         stepTimer.setCycleCount(Timeline.INDEFINITE);
 
         //Set up numpad listener
-        canvas = new Canvas(400,400);
+        canvas = new Canvas(640,320);
         Pane root = new Pane(canvas);
         mainScene = new Scene(root);
         stage.setScene(mainScene);
@@ -127,6 +137,10 @@ public class CHIP8 extends Application{
     }
 
     public void step() {
+        if (paused){
+            return;
+        }
+
         //Decrement sound and delay timers
         if (System.currentTimeMillis() - lastTime > 16) {
             dt = dt > 0 ? (dt - 1) : 0;
@@ -183,7 +197,9 @@ public class CHIP8 extends Application{
 
         //Skip Not Equal
         if ((high  & 0xFF) >>> 4 == 4) {
-            if (gpr[high & 0x0F] != low) {
+            //System.out.println(gpr[high & 0x0F]  + " " + (low & 0xFF));
+            if (gpr[high & 0x0F] != (low & 0xFF)) {
+                System.out.println("Skipping " + (pc + 2));
                 pc += 4;
             } else {
                 pc += 2;
@@ -203,6 +219,7 @@ public class CHIP8 extends Application{
 
         //Load Literal
         if ((high  & 0xFF) >>> 4 == 6) {
+            System.out.println("Loading " + low + " into GPR" + (high & 0x0F));
             gpr[high & 0x0F] = low;
             pc+=2;
             return;
@@ -340,19 +357,36 @@ public class CHIP8 extends Application{
     }
 
     public void debugDrawSprite(int address, int size) {
-        System.out.println("Address: " + I);
+        System.out.println("Address: " + gpr[3]);
         for (int i = 0; i < size; i++) {
-            //System.out.println(String.format("%8s", Integer.toBinaryString(ram[address + i])).replace(' ', '0'));
-            System.out.println(ram[address + i]);
+            System.out.println(String.format("%8s", Integer.toBinaryString(ram[address + i])).replace(' ', '0'));
+            //System.out.println(ram[address + i]);
         }
         System.out.println();
     }
 
+    private void updateDisplay() {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        for (int row = 0; row < 32; row++) {
+            for (int column = 0; column < 64; column++) {
+                if (display[column][row]) {
+                    gc.setFill(Color.WHITE);
+                    gc.fillRect(column * 10, row * 10, 10, 10);
+                } else {
+                    gc.setFill(Color.BLACK);
+                    gc.fillRect(column * 10, row * 10, 10, 10);
+                }
+            }
+        }
+    }
+
     public void draw(int low, int high) {
+        System.out.println((high & 0x0F) + ", " + ((low >>> 4) & 0x0F));
         int size = low & 0x0F;
         int xPos = gpr[high & 0x0F];
         int yPos = gpr[low >>> 4];
-        debugDrawSprite(I, size);
+        //debugDrawSprite(I, size);
+
         //Lines, starting at address in I
         for (int line = 0; line < size; line++) {
             //Wrap y coord
@@ -388,6 +422,7 @@ public class CHIP8 extends Application{
                 display[newX][newY] = result;
             }
         }
+        updateDisplay();
         pc+=2;
         return;
     }
@@ -467,12 +502,18 @@ public class CHIP8 extends Application{
             }
             //Copy array into RAM
             for (int i = 0; i < allBytes.length; i++) {
-                ram[i + 0x200] = allBytes[i];
+                ram[0x200 + i] = allBytes[i];
             }
         } catch (Exception ex) {
             throw new FileNotFoundException("ROM file not found!");
         }
         return true;
+    }
+
+    public void pokeRAM(int addr, int[] data) {
+        for (int i = 0; i < data.length; i++) {
+            ram[addr + i] = data[i];
+        }
     }
 
     public String dumpRom(int length) {
@@ -499,6 +540,7 @@ public class CHIP8 extends Application{
                 pixel = false;
             }
         }
+        updateDisplay();
     }
 
     private void keyPressed(KeyEvent evt){
@@ -516,10 +558,14 @@ public class CHIP8 extends Application{
         String ch = evt.getCharacter();
 
         for (int i = 0; i < mapping.length; i++)  {
-            if (mapping[i] == ch + "") {
+            if (mapping[i].compareTo(ch + "") == 0) {
                 //Key pressed
                 numpad[i] = false;
             }
+        }
+
+        if (ch.compareTo("p") == 0) {
+            paused = !paused;
         }
     }
 }
