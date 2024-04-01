@@ -22,7 +22,7 @@ import java.io.FileInputStream;
 */
 public class CHIP8 extends Application{
 
-    public static final boolean DEBUG = false;
+    public static final boolean DEBUG = true;
     /**General purpose RAM.*/
     int[] ram;
 
@@ -75,7 +75,7 @@ public class CHIP8 extends Application{
     public void start(Stage stage) {
         reset();
         rom = "3-corax+.ch8";
-        frequency = 15;
+        frequency = 50;
         try {
             //loadRom(rom);
             //Load 0 into V3            0x6000
@@ -139,7 +139,7 @@ public class CHIP8 extends Application{
 
     public void step() {
         if (paused){
-            debug("Paused");
+            //debug("Paused");
             return;
         }
 
@@ -167,20 +167,15 @@ public class CHIP8 extends Application{
                 return;
             } else if ((low & 0xFF) == 0xEE) { //RET
                 if (DEBUG) debug("Return");
-                pc = stack[sp--];
+                pc = stack[sp--] + 2;
                 return;
-            } else {
-                System.out.println("BAD-OP at " + pc + ": " + (low + (high << 8) & 0xFFFF));
-                paused = true;
-                debug(dumpRom(4096 - 0x200));
-                
             }
         }
 
         //JP
         if (((high & 0xF0)) == 0x10) {
             debug("jmp: " + (low + (high << 8) & 0x0FFF));
-            pc = low + (high << 8) & 0x0FFF;
+            pc = (((high & 0x0F) << 8) + (low & 0xFF));
             return;
         }
 
@@ -188,7 +183,7 @@ public class CHIP8 extends Application{
         if ((high  & 0xF0) == 0x20) {
             sp++;
             stack[sp] = pc;
-            int addr = ((high & 0x0F) << 8) + (low & 0xFF);
+            int addr = (((high & 0x0F) << 8) + (low & 0xFF));
             debug("CALL: " + addr);
             pc = addr;
             return;
@@ -196,7 +191,7 @@ public class CHIP8 extends Application{
 
         //Skip Equal Literal
         if ((high  & 0xF0) == 0x30) {
-            if (gpr[high & 0x0F] == low) {
+            if (gpr[high & 0x0F] == (low & 0xFF)) {
                 debug("Skipped " + (pc + 2));
                 pc += 4;
             } else {
@@ -230,7 +225,7 @@ public class CHIP8 extends Application{
         //Load Literal
         if ((high  & 0xFF) >>> 4 == 6) {
             debug("Loading " + low + " into GPR" + (high & 0x0F));
-            gpr[high & 0x0F] = low;
+            gpr[high & 0x0F] = low & 0xFF;
             pc+=2;
             return;
         }
@@ -321,7 +316,7 @@ public class CHIP8 extends Application{
     public void subsetF(int low, int high) {
         switch (low) {
             case 0x07://Read delay timer
-                gpr[high & 0x0F] = dt;
+                gpr[high & 0x0F] = dt & 0xFF;
                 break;
             case 0x0A://Wait for key press
                 stepTimer.pause();
@@ -340,10 +335,10 @@ public class CHIP8 extends Application{
                 stepTimer.play();
                 break;
             case 0x15://Set delay timer
-                dt = gpr[high & 0x0F];
+                dt = gpr[high & 0x0F] & 0xFF;
                 break;
             case 0x18://Set sound timer
-                st = gpr[high & 0x0F];
+                st = gpr[high & 0x0F] & 0xFF;
                 break;
             case 0x1E://Add value to I
                 I += gpr[high & 0x0F];
@@ -359,12 +354,12 @@ public class CHIP8 extends Application{
                 break;
             case 0x55:
                 for (int i = 0; i < (high & 0x0F); i++) {
-                    ram[I + i] = gpr[i];
+                    ram[I + i] = gpr[i] & 0xFF;
                 }
                 break;
             case 0x65:
                 for (int i = 0; i < (high & 0x0F); i++) {
-                    gpr[i] = ram[I + i];
+                    gpr[i] = ram[I + i] & 0xFF;
                 }
                 break;
         }
@@ -436,14 +431,16 @@ public class CHIP8 extends Application{
                 }
                 //Update dsiplay
                 display[newX][newY] = result;
-                updateDisplay();
+                //updateDisplay();
             }
         }
+        updateDisplay();
         pc+=2;
         return;
     }
 
     public void subset8(int low, int high) {
+        debug("Subset 8: " + (high & 0xF));
         switch (low & 0x0F) {
             case 0: //Load
                 gpr[high & 0x0F] = gpr[low >>> 4];
@@ -467,12 +464,12 @@ public class CHIP8 extends Application{
                 gpr[high & 0x0F] = sum & 0xFF;
                 break;
             case 5: //SUB
-                if (gpr[high & 0x0F] > gpr[low >>> 4]) {
-                    gpr[0xF] = 1 & 0xFF;
+                if ((gpr[high & 0x0F] & 0xFF) > (gpr[low >>> 4] & 0xFF)) {
+                    gpr[0xF] = 0x01;
                     gpr[high & 0x0F] = (gpr[high & 0x0F] - gpr[low >>> 4]) & 0xFF;
                 } else {
-                    gpr[0xF] = 0 & 0x00;
-                    gpr[high & 0x0F] = 0 & 0x00;
+                    gpr[0xF] = 0x00;
+                    gpr[high & 0x0F] = 0x00;
                 }
                 break;
             case 6: //SHR
@@ -481,20 +478,24 @@ public class CHIP8 extends Application{
                 break;
             case 7: //SUBN
                 if (gpr[high & 0x0F] < gpr[low >>> 4]) {
-                    gpr[0xF] = 1 & 0xFF;
-                    gpr[high & 0x0F] = (gpr[low >>> 4] - gpr[high & 0x0F]) & 0xFF;
+                    gpr[0xF] = 0x01;
+                    gpr[high & 0x0F] = (gpr[low >>> 4] - gpr[high & 0x0F]);
                 } else {
-                    gpr[0xF] = 0 & 0x00;
-                    gpr[high & 0x0F] = 0 & 0x00;
+                    gpr[0xF] = 0x00;
+                    gpr[high & 0x0F] = 0x00;
                 }
                 break;
             case 0xE:
-                if (gpr[high & 0x0F] >>> 7 > 0) {
-                    gpr[0xF] = 1 & 0xFF;
+                //debug("8E: " + Integer.toBinaryString(gpr[high & 0x0F]));
+                //paused = true;
+                if ((gpr[high & 0x0F] & 0x80) > 0) {
+                    gpr[0xF] = 0x01;
                 } else {
-                    gpr[0xF] = 0 & 0x00;
+                    gpr[0xF] = 0x00;
                 }
-                gpr[high & 0x0F] = gpr[high & 0x0F] << 1;
+                //debug(Integer.toBinaryString(gpr[high & 0x0F]));
+                gpr[high & 0x0F] = ((gpr[high & 0x0F] & 0xFF) << 1) & 0xFF;
+                //debug(Integer.toBinaryString(gpr[high & 0x0F]));
                 break;
             default:
                 debug("Unkown opcode???");
