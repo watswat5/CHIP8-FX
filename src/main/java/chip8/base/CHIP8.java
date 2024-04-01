@@ -22,6 +22,7 @@ import java.io.FileInputStream;
 */
 public class CHIP8 extends Application{
 
+    public static final boolean DEBUG = false;
     /**General purpose RAM.*/
     int[] ram;
 
@@ -73,8 +74,8 @@ public class CHIP8 extends Application{
 
     public void start(Stage stage) {
         reset();
-        rom = "2-ibm-logo (1).ch8";
-        frequency = 100;
+        rom = "3-corax+.ch8";
+        frequency = 15;
         try {
             //loadRom(rom);
             //Load 0 into V3            0x6000
@@ -87,7 +88,7 @@ public class CHIP8 extends Application{
             //Jump to 0x202             0x1202
             loadRom(rom);
             //pokeRAM(0x200, new int[]{0x63,0x00, 0x00,0xE0, 0xF3,0x29, 0xD0,0x05, 0x73,0x01, 0x43,0x10, 0x63,0x00, 0x12,0x02});
-            //System.out.println(dumpRom(1024));
+            //debug(dumpRom(1024));
         } catch (FileNotFoundException ex) {
             throw new RuntimeException("File not found!");
         }
@@ -138,6 +139,7 @@ public class CHIP8 extends Application{
 
     public void step() {
         if (paused){
+            debug("Paused");
             return;
         }
 
@@ -154,43 +156,48 @@ public class CHIP8 extends Application{
         //Decode Instruction
         String lower = String.format("%02X", low);
         String upper = String.format("%02X", high);
-        //System.out.println(pc + ": " + upper.substring(upper.length() - 2, upper.length()) + " " + lower.substring(lower.length() - 2, lower.length()) + "\n");
+        debug(pc + ": " + upper.substring(upper.length() - 2, upper.length()) + " " + lower.substring(lower.length() - 2, lower.length()) + "\n");
 
         //00 high
         if (high == 0) {
             if ((low & 0xFF) == 0xE0) { //CLS
+                debug("Clear Display");
                 clearDisplay();
                 pc+=2;
                 return;
             } else if ((low & 0xFF) == 0xEE) { //RET
+                if (DEBUG) debug("Return");
                 pc = stack[sp--];
                 return;
             } else {
                 System.out.println("BAD-OP at " + pc + ": " + (low + (high << 8) & 0xFFFF));
                 paused = true;
-                System.out.println(dumpRom(4096 - 0x200));
+                debug(dumpRom(4096 - 0x200));
                 
             }
         }
 
         //JP
-        if ((high & 0xF0) == 0x0010) {
-            //System.out.println("jmp: " + (low + (high << 8) & 0x0FFF));
+        if (((high & 0xF0)) == 0x10) {
+            debug("jmp: " + (low + (high << 8) & 0x0FFF));
             pc = low + (high << 8) & 0x0FFF;
             return;
         }
 
         //CALL
-        if ((high  & 0xFF) >>> 4 == 2) {
+        if ((high  & 0xF0) == 0x20) {
             sp++;
             stack[sp] = pc;
-            pc = low + (high << 8) & 0x0FFF;
+            int addr = ((high & 0x0F) << 8) + (low & 0xFF);
+            debug("CALL: " + addr);
+            pc = addr;
             return;
         }
 
         //Skip Equal Literal
-        if ((high  & 0xFF) >>> 4 == 3) {
+        if ((high  & 0xF0) == 0x30) {
             if (gpr[high & 0x0F] == low) {
+                debug("Skipped " + (pc + 2));
                 pc += 4;
             } else {
                 pc += 2;
@@ -201,6 +208,7 @@ public class CHIP8 extends Application{
         //Skip Not Equal
         if ((high  & 0xFF) >>> 4 == 4) {
             if (gpr[high & 0x0F] != (low & 0xFF)) {
+                debug("Skipped " + (pc + 2));
                 pc += 4;
             } else {
                 pc += 2;
@@ -211,6 +219,7 @@ public class CHIP8 extends Application{
         //Skip Equal Register
         if ((high  & 0xFF) >>> 4 == 5) {
             if (gpr[high & 0x0F] == gpr[low >>> 4]) {
+                debug("Skipped " + (pc + 2));
                 pc += 4;
             } else {
                 pc += 2;
@@ -220,7 +229,7 @@ public class CHIP8 extends Application{
 
         //Load Literal
         if ((high  & 0xFF) >>> 4 == 6) {
-            System.out.println("Loading " + low + " into GPR" + (high & 0x0F));
+            debug("Loading " + low + " into GPR" + (high & 0x0F));
             gpr[high & 0x0F] = low;
             pc+=2;
             return;
@@ -228,6 +237,7 @@ public class CHIP8 extends Application{
 
         //Add Literal
         if ((high  & 0xFF) >>> 4 == 7) {
+            debug("Adding " + low + " into GPR" + (high & 0x0F));
             gpr[high & 0x0F] += low;
             pc+=2;
             return;
@@ -251,7 +261,7 @@ public class CHIP8 extends Application{
 
         //Load Immediate into I
         if ((high & 0xFF) >>> 4 == 0x0A) {
-            System.out.println("Setting I:" + (((high & 0x0F) << 8) + (low & 0xFF)));
+            debug("Setting I:" + (((high & 0x0F) << 8) + (low & 0xFF)));
             I = (((high & 0x0F) << 8) + (low & 0xFF));
             pc+=2;
             return;
@@ -302,6 +312,10 @@ public class CHIP8 extends Application{
             subsetF(low, (high  & 0xFF));
             return;
         }
+
+        //Unknown OPcode, pause
+        paused = true;
+        return;
     }
 
     public void subsetF(int low, int high) {
@@ -359,12 +373,12 @@ public class CHIP8 extends Application{
     }
 
     public void debugDrawSprite(int address, int size) {
-        System.out.println("Address: " + gpr[3]);
+        if (DEBUG) System.out.println("Address: " + gpr[3]);
         for (int i = 0; i < size; i++) {
-            System.out.println(String.format("%8s", Integer.toBinaryString(ram[address + i])).replace(' ', '0'));
-            //System.out.println(ram[address + i]);
+            if (DEBUG) System.out.println(String.format("%8s", Integer.toBinaryString(ram[address + i])).replace(' ', '0'));
+            //if (DEBUG) System.out.println(ram[address + i]);
         }
-        System.out.println();
+        if (DEBUG) System.out.println();
     }
 
     private void updateDisplay() {
@@ -383,7 +397,7 @@ public class CHIP8 extends Application{
     }
 
     public void draw(int low, int high) {
-        //System.out.println((high & 0x0F) + ", " + ((low >>> 4) & 0x0F));
+        //if (DEBUG) System.out.println((high & 0x0F) + ", " + ((low >>> 4) & 0x0F));
         int size = low & 0x0F;
         int xPos = gpr[high & 0x0F];
         int yPos = gpr[((low >>> 4) & 0x0F)];
@@ -422,9 +436,9 @@ public class CHIP8 extends Application{
                 }
                 //Update dsiplay
                 display[newX][newY] = result;
+                updateDisplay();
             }
         }
-        updateDisplay();
         pc+=2;
         return;
     }
@@ -483,7 +497,7 @@ public class CHIP8 extends Application{
                 gpr[high & 0x0F] = gpr[high & 0x0F] << 1;
                 break;
             default:
-                System.out.println("Unkown opcode???");
+                debug("Unkown opcode???");
                 break;
         }
         pc+=2;
@@ -527,7 +541,7 @@ public class CHIP8 extends Application{
             if (i % 20 == 0) {
                 t_string += "\n";
             }
-            //System.out.println(Integer.toHexString(ram[i]) + " " + Integer.toHexString(ram[i + 1]));
+            //if (DEBUG) System.out.println(Integer.toHexString(ram[i]) + " " + Integer.toHexString(ram[i + 1]));
         }
         return t_string;
     }
@@ -558,6 +572,10 @@ public class CHIP8 extends Application{
         if (ch.compareTo("p") == 0) {
             paused = !paused;
         }
+    }
+
+    private void debug(String s) {
+        if (DEBUG) System.out.println(s);
     }
 
     private void keyReleased(KeyEvent evt){
