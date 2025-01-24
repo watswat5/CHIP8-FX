@@ -440,7 +440,7 @@ public class CHIP8 extends Application{
     }
 
     public void subset8(int low, int high) {
-        debug("Subset 8: " + (high & 0xF));
+        debug("Subset 8: " + (low & 0x0F));
         switch (low & 0x0F) {
             case 0: //Load
                 gpr[high & 0x0F] = gpr[low >>> 4];
@@ -464,13 +464,17 @@ public class CHIP8 extends Application{
                 gpr[high & 0x0F] = sum & 0xFF;
                 break;
             case 5: //SUB
-                if ((gpr[high & 0x0F] & 0xFF) > (gpr[low >>> 4] & 0xFF)) {
+                debug(gpr[high & 0x0F] + ", " +  gpr[low >>> 4]);
+                if (gpr[high & 0x0F] > gpr[low >>> 4]) {
                     gpr[0xF] = 0x01;
                     gpr[high & 0x0F] = (gpr[high & 0x0F] - gpr[low >>> 4]) & 0xFF;
                 } else {
                     gpr[0xF] = 0x00;
-                    gpr[high & 0x0F] = 0x00;
+                    //Going to borrow, so take the difference between the Low and High and sub from 0xFF
+                    gpr[high & 0x0F] = 0xFF - (gpr[low >>> 4] - gpr[high & 0x0F] - 1);
                 }
+                debug("" + gpr[high & 0x0F]);
+                //paused = true;
                 break;
             case 6: //SHR
                 gpr[0x0F] = gpr[high & 0x0F] & 0x01;
@@ -482,7 +486,7 @@ public class CHIP8 extends Application{
                     gpr[high & 0x0F] = (gpr[low >>> 4] - gpr[high & 0x0F]);
                 } else {
                     gpr[0xF] = 0x00;
-                    gpr[high & 0x0F] = 0x00;
+                    gpr[high & 0x0F] = 0xFF - (gpr[high & 0x0F] - gpr[low >>> 4] - 1);;
                 }
                 break;
             case 0xE:
