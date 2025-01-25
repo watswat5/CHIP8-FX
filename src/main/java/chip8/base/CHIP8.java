@@ -232,12 +232,13 @@ public class CHIP8 extends Application{
 
         //Add Literal
         if ((high  & 0xFF) >>> 4 == 7) {
-            debug("Adding " + low + " into GPR" + (high & 0x0F));
+            debug("Adding " + (low & 0xFF) + " into GPR" + (high & 0x0F));
             gpr[high & 0x0F] += (low & 0xFF);
-            if (gpr[high & 0x0f]  > 255) {
-                gpr[high & 0x0f] -= 255;
+            while (gpr[high & 0x0f]  > 255) {
+                gpr[high & 0x0f] -= 256;
             }
             pc+=2;
+            //paused = true;
             return;
         }
 
@@ -464,12 +465,12 @@ public class CHIP8 extends Application{
             case 4: //Add
                 int sum = (gpr[high & 0x0F] + gpr[low >>> 4]);
                 if (sum > 255) {
-                    gpr[0xF] = 1 & 0xFF;
+                    gpr[0xF] -= 1 & 0xFF;
                 } else {
                     gpr[0xF] = 0 & 0x00;
                 }
                 while (sum > 255) {
-                    sum -= 255;
+                    sum -= 256;
                 }
                 gpr[high & 0x0F] = sum & 0xFF;
                 break;
