@@ -414,15 +414,15 @@ public class CHIP8 extends Application{
     public void draw(int low, int high) {
         //if (DEBUG) System.out.println((high & 0x0F) + ", " + ((low >>> 4) & 0x0F));
         int size = low & 0x0F;
-        int xPos = gpr[high & 0x0F];
-        int yPos = gpr[((low >>> 4) & 0x0F)];
+        int xPos = gpr[high & 0x0F] & 0xFF;
+        int yPos = gpr[((low >>> 4) & 0x0F)] & 0xFF;
         //debugDrawSprite(I, size);
         gpr[0xF] = 0x0;
         //Lines, starting at address in I
         for (int line = 0; line < size; line++) {
             //Wrap y coord
             int newY = yPos + line;
-            if (newY > 31) {
+            while (newY > 31) {
                 newY = newY - 32;
             }
             int bits = ram[I + line];
@@ -430,7 +430,7 @@ public class CHIP8 extends Application{
             for (int column = 0; column < 8; column++) {
                 //Wrap x coord
                 int newX = xPos + column;
-                if (newX > 63) {
+                while (newX > 63) {
                     newX -= 64;
                 }
                 //Top left of sprite is at xPos, yPos and is MSB of line 0
