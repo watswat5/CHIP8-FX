@@ -224,7 +224,7 @@ public class CHIP8 extends Application{
 
         //Load Literal
         if ((high  & 0xFF) >>> 4 == 6) {
-            debug("Loading " + low + " into GPR" + (high & 0x0F));
+            debug("Loading " + (low & 0xFF) + " into GPR" + (high & 0x0F));
             gpr[high & 0x0F] = low & 0xFF;
             pc+=2;
             return;
@@ -233,7 +233,10 @@ public class CHIP8 extends Application{
         //Add Literal
         if ((high  & 0xFF) >>> 4 == 7) {
             debug("Adding " + low + " into GPR" + (high & 0x0F));
-            gpr[high & 0x0F] += low;
+            gpr[high & 0x0F] += (low & 0xFF);
+            if (gpr[high & 0x0f]  > 255) {
+                gpr[high & 0x0f] -= 255;
+            }
             pc+=2;
             return;
         }
@@ -353,14 +356,18 @@ public class CHIP8 extends Application{
                 ram[I] = ((val / 100) % 10) & 0xFF;
                 break;
             case 0x55:
-                for (int i = 0; i < (high & 0x0F); i++) {
+                for (int i = 0; i <= (high & 0x0F); i++) {
                     ram[I + i] = gpr[i] & 0xFF;
                 }
                 break;
             case 0x65:
-                for (int i = 0; i < (high & 0x0F); i++) {
+                debug("" + (high & 0x0F));
+                for (int i = 0; i <= (high & 0x0F); i++) {
+                    debug("GPR"+ i + ": " + (ram[I + i] & 0x0F));
                     gpr[i] = ram[I + i] & 0xFF;
                 }
+                //I += (high & 0x0F) + 1;
+                //paused = true;
                 break;
         }
         pc+=2;
@@ -460,6 +467,9 @@ public class CHIP8 extends Application{
                     gpr[0xF] = 1 & 0xFF;
                 } else {
                     gpr[0xF] = 0 & 0x00;
+                }
+                while (sum > 255) {
+                    sum -= 255;
                 }
                 gpr[high & 0x0F] = sum & 0xFF;
                 break;
