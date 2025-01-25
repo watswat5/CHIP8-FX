@@ -22,7 +22,7 @@ import java.io.FileInputStream;
 */
 public class CHIP8 extends Application{
 
-    public static final boolean DEBUG = true;
+    public static boolean DEBUG = true;
     /**General purpose RAM.*/
     int[] ram;
 
@@ -68,30 +68,26 @@ public class CHIP8 extends Application{
     /**Speed in Hz*/
     double frequency;
 
+    /**Used to pause execution for debugging.*/
     boolean paused;
+
     Scene mainScene;
     Canvas canvas;
 
     public void start(Stage stage) {
-        reset();
-        rom = "3-corax+.ch8";
-        frequency = 50;
-        try {
-            //loadRom(rom);
-            //Load 0 into V3            0x6000
-            //Clear display             0x00E0
-            //Set I to digit for V3     0xF329
-            //Draw                      0xD005
-            //Add 1 to V3               0x7301
-            //Skip next if V3 != 16     0x4310
-            //  Load 0 into V3          0x6000
-            //Jump to 0x202             0x1202
-            loadRom(rom);
-            //pokeRAM(0x200, new int[]{0x63,0x00, 0x00,0xE0, 0xF3,0x29, 0xD0,0x05, 0x73,0x01, 0x43,0x10, 0x63,0x00, 0x12,0x02});
-            //debug(dumpRom(1024));
-        } catch (FileNotFoundException ex) {
-            throw new RuntimeException("File not found!");
+        Parameters params = getParameters();
+        rom = params.getNamed().get("rom");//"3-corax+.ch8";
+        frequency = Double.parseDouble(params.getNamed().get("clock"));//Clock speed
+
+        //Enable/disable debug
+        if (params.getNamed().containsKey("debug")) {
+            String dbg = params.getNamed().get("debug");
+            DEBUG = dbg.toUpperCase().compareTo("TRUE") == 0;
+        } else {
+            DEBUG = false;
         }
+
+        reset();
         stepTimer = new Timeline( new KeyFrame(Duration.seconds(1.0/frequency),(e) -> step()));
         stepTimer.setCycleCount(Timeline.INDEFINITE);
 
@@ -115,13 +111,14 @@ public class CHIP8 extends Application{
         gpr = new int[16];
         dt = 0;
         st = 0;
+        //draw_timer = 60;
         stack = new int[16];
         sp = 0;
         pc = 0x200;
         display = new boolean[64][32];
         I = 0;
         numpad = new boolean[16];
-        mapping = new String[]{"1","2","3","4","q","w","e","r","a","s","d","f","z","x","c","v"};
+        mapping = new String[]{"x","1","2","3","q","w","e","a","s","d","z","c","4","r","f","v"};
 
         //Load charset into RAM
         int[] charset = {0xF0,0x90,0x90,0x90,0xF0,0x20,0x60,0x20,0x20,0x70,0xF0,0x10,0xF0,0x80,0xF0,0xF0,0x10,0xF0,0x10,0xF0,0x90,0x90,0xF0,0x10
@@ -132,6 +129,11 @@ public class CHIP8 extends Application{
             ram[i] = (charset[i] & 0xFF);
         }
 
+        try {
+            loadRom(rom);
+        } catch (FileNotFoundException ex) {
+            throw new RuntimeException("File not found!");
+        }
         //Init timer variable
         lastTime = System.currentTimeMillis();
         paused = false;
@@ -143,10 +145,12 @@ public class CHIP8 extends Application{
             return;
         }
 
-        //Decrement sound and delay timers
+        //Display update timer
         if (System.currentTimeMillis() - lastTime > 16) {
             dt = dt > 0 ? (dt - 1) : 0;
             st = st > 0 ? (st - 1) : 0;
+            updateDisplay();
+            lastTime = System.currentTimeMillis();
         }
 
         //Fetch instruction
@@ -159,14 +163,14 @@ public class CHIP8 extends Application{
         debug(pc + ": " + upper.substring(upper.length() - 2, upper.length()) + " " + lower.substring(lower.length() - 2, lower.length()) + "\n");
 
         //00 high
-        if (high == 0) {
+        if ((high & 0xFF) == 0) {
             if ((low & 0xFF) == 0xE0) { //CLS
                 debug("Clear Display");
                 clearDisplay();
                 pc+=2;
                 return;
             } else if ((low & 0xFF) == 0xEE) { //RET
-                if (DEBUG) debug("Return");
+                debug("Return");
                 pc = stack[sp--] + 2;
                 return;
             }
@@ -213,7 +217,7 @@ public class CHIP8 extends Application{
 
         //Skip Equal Register
         if ((high  & 0xFF) >>> 4 == 5) {
-            if (gpr[high & 0x0F] == gpr[low >>> 4]) {
+            if (gpr[high & 0x0F] == gpr[(low >>> 4) & 0x0F]) {
                 debug("Skipped " + (pc + 2));
                 pc += 4;
             } else {
@@ -250,7 +254,7 @@ public class CHIP8 extends Application{
 
         //Skip NE
         if ((high  & 0xFF) >>> 4 == 9) {
-            if (gpr[high & 0x0F] != gpr[low >>> 4]) {
+            if (gpr[high & 0x0F] != gpr[(low >>> 4) & 0x0F]) {
                 pc += 4;
             } else {
                 pc += 2;
@@ -287,17 +291,21 @@ public class CHIP8 extends Application{
 
         //Keypad Skip
         if ((high  & 0xFF) >>> 4 == 0xE) {
+            for(boolean key : numpad) {
+                System.out.print("" + key + "\t");
+            }
+            System.out.println("\t Looking for " + gpr[(high & 0x0F)]);
             //Skip Equal
-            if (low == 0x9E) {
-                if (numpad[high & 0x0F]) {
+            if ((low & 0xFF) == 0x9E) {
+                if (numpad[gpr[high & 0x0F]]) {
                     pc += 4;
                 } else {
                     pc += 2;
                 }
             }
             //Skip Not Equal
-            if (low == 0xA1) {
-                if (!numpad[high & 0x0F]) {
+            if ((low & 0xFF) == 0xA1) {
+                if (!numpad[gpr[high & 0x0F]]) {
                     pc += 4;
                 } else {
                     pc += 2;
@@ -321,45 +329,48 @@ public class CHIP8 extends Application{
         switch (low) {
             case 0x07://Read delay timer
                 gpr[high & 0x0F] = dt & 0xFF;
+                pc += 2;
                 break;
             case 0x0A://Wait for key press
-                stepTimer.pause();
-                boolean pressed = false;
                 int key = -1;
-                while (!pressed) {
-                    for (int i = 0; i < 16; i++) {
-                        if (numpad[i]) {
-                            key = i;
-                            pressed = true;
-                            break;
-                        }
+                for (int i = 0; i < 16; i++) {
+                    if (numpad[i]) {
+                        key = i;
+                        gpr[high & 0x0F] = key & 0xFF;
+                        pc+=2;
+                        break;
                     }
                 }
-                gpr[high & 0x0F] = key & 0xFF;
-                stepTimer.play();
                 break;
             case 0x15://Set delay timer
                 dt = gpr[high & 0x0F] & 0xFF;
+                pc+=2;
                 break;
             case 0x18://Set sound timer
                 st = gpr[high & 0x0F] & 0xFF;
+                pc+=2;
                 break;
             case 0x1E://Add value to I
                 I += gpr[high & 0x0F];
+                pc+=2;
                 break;
             case 0x29://Set I to digit address
                 I = 5 * gpr[high & 0x0F];
+                pc+=2;
                 break;
             case 0x33://BCD
                 int val = gpr[high & 0x0F];
                 ram[I + 2] = (val % 10) & 0xFF;
                 ram[I + 1] = ((val / 10) % 10) & 0xFF;
                 ram[I] = ((val / 100) % 10) & 0xFF;
+                pc+=2;
                 break;
             case 0x55:
                 for (int i = 0; i <= (high & 0x0F); i++) {
                     ram[I + i] = gpr[i] & 0xFF;
                 }
+                I += (high & 0x0F) + 1;
+                pc+=2;
                 break;
             case 0x65:
                 debug("" + (high & 0x0F));
@@ -367,11 +378,12 @@ public class CHIP8 extends Application{
                     debug("GPR"+ i + ": " + (ram[I + i] & 0x0F));
                     gpr[i] = ram[I + i] & 0xFF;
                 }
-                //I += (high & 0x0F) + 1;
+                //I++;
+                I += (high & 0x0F) + 1;
                 //paused = true;
+                pc+=2;
                 break;
         }
-        pc+=2;
         return;
     }
 
@@ -405,7 +417,7 @@ public class CHIP8 extends Application{
         int xPos = gpr[high & 0x0F];
         int yPos = gpr[((low >>> 4) & 0x0F)];
         //debugDrawSprite(I, size);
-
+        gpr[0xF] = 0x0;
         //Lines, starting at address in I
         for (int line = 0; line < size; line++) {
             //Wrap y coord
@@ -434,15 +446,15 @@ public class CHIP8 extends Application{
                 //Check to see if pixel was erased
                 if (pixel && !result) {
                     gpr[0xF] = 1;
-                } else {
-                    gpr[0xF] = 0;
-                }
+                } //else {
+                    //gpr[0xF] = 0;
+                //}
                 //Update dsiplay
                 display[newX][newY] = result;
                 //updateDisplay();
             }
         }
-        updateDisplay();
+        //updateDisplay(); //Now done on a timer
         pc+=2;
         return;
     }
@@ -451,65 +463,78 @@ public class CHIP8 extends Application{
         debug("Subset 8: " + (low & 0x0F));
         switch (low & 0x0F) {
             case 0: //Load
-                gpr[high & 0x0F] = gpr[low >>> 4];
+                gpr[high & 0x0F] = gpr[(low >>> 4) & 0x0F];
                 break;
             case 1: //OR
-                gpr[high & 0x0F] |= gpr[low >>> 4];
+                gpr[high & 0x0F] |= gpr[(low >>> 4) & 0x0F];
+                gpr[0xF] = 0x0;
                 break;
             case 2: //AND
-                gpr[high & 0x0F] &= gpr[low >>> 4];
+                gpr[high & 0x0F] &= gpr[(low >>> 4) & 0x0F];
+                gpr[0xF] = 0x0;
                 break;
             case 3: //XOR
-                gpr[high & 0x0F] ^= gpr[low >>> 4];
+                gpr[high & 0x0F] ^= gpr[(low >>> 4) & 0x0F];
+                gpr[0xF] = 0x0;
                 break;
             case 4: //Add
-                int sum = (gpr[high & 0x0F] + gpr[low >>> 4]);
-                if (sum > 255) {
-                    gpr[0xF] -= 1 & 0xFF;
-                } else {
-                    gpr[0xF] = 0 & 0x00;
-                }
+                int sum = (gpr[high & 0x0F] + gpr[(low >>> 4) & 0x0F]);
+                boolean overflow = false;
                 while (sum > 255) {
+                    overflow = true;
                     sum -= 256;
                 }
                 gpr[high & 0x0F] = sum & 0xFF;
-                break;
-            case 5: //SUB
-                debug(gpr[high & 0x0F] + ", " +  gpr[low >>> 4]);
-                if (gpr[high & 0x0F] > gpr[low >>> 4]) {
+                if (overflow) {
                     gpr[0xF] = 0x01;
-                    gpr[high & 0x0F] = (gpr[high & 0x0F] - gpr[low >>> 4]) & 0xFF;
                 } else {
                     gpr[0xF] = 0x00;
-                    //Going to borrow, so take the difference between the Low and High and sub from 0xFF
-                    gpr[high & 0x0F] = 0xFF - (gpr[low >>> 4] - gpr[high & 0x0F] - 1);
                 }
-                debug("" + gpr[high & 0x0F]);
+                break;
+            case 5: //SUB
+                debug(gpr[high & 0x0F] + ", " +  gpr[(low >>> 4) & 0x0F]);
+                int xval = gpr[high & 0x0F] & 0xFF;
+                int yval = gpr[(low >>> 4) & 0x0F] & 0xFF;
+                gpr[high & 0x0F] = (xval - yval) & 0xFF; // Perform subtraction
+                if (xval >= yval) {
+                    gpr[0xF] = 0x01;
+                } else {
+                    gpr[0xF] = 0x00;
+                }
                 //paused = true;
                 break;
             case 6: //SHR
-                gpr[0x0F] = gpr[high & 0x0F] & 0x01;
+                gpr[high & 0xF] = gpr[(low >>> 4) & 0xF];
+                int set = gpr[high & 0x0F] & 0x01;
                 gpr[high & 0x0F] = gpr[high & 0x0F] >>> 1;
+                gpr[0x0F] = set & 0xFF;
                 break;
             case 7: //SUBN
-                if (gpr[high & 0x0F] < gpr[low >>> 4]) {
+                if (gpr[high & 0x0F] <= gpr[(low >>> 4) & 0x0F]) {
+                    gpr[high & 0x0F] = (gpr[(low >>> 4) & 0x0F] - gpr[high & 0x0F]);
                     gpr[0xF] = 0x01;
-                    gpr[high & 0x0F] = (gpr[low >>> 4] - gpr[high & 0x0F]);
                 } else {
+                    gpr[high & 0x0F] = 0xFF - (gpr[high & 0x0F] - gpr[(low >>> 4) & 0x0F] - 1);
                     gpr[0xF] = 0x00;
-                    gpr[high & 0x0F] = 0xFF - (gpr[high & 0x0F] - gpr[low >>> 4] - 1);;
                 }
                 break;
             case 0xE:
                 //debug("8E: " + Integer.toBinaryString(gpr[high & 0x0F]));
                 //paused = true;
+                boolean bs = false;
+                gpr[high & 0xF] = gpr[(low >>> 4) & 0xF];
                 if ((gpr[high & 0x0F] & 0x80) > 0) {
+                    bs = true;
+                } else {
+                    bs = false;
+                }
+                //debug(Integer.toBinaryString(gpr[high & 0x0F]));
+                gpr[high & 0x0F] = ((gpr[high & 0x0F] & 0xFF) << 1) & 0xFF;
+                if (bs) {
                     gpr[0xF] = 0x01;
                 } else {
                     gpr[0xF] = 0x00;
                 }
-                //debug(Integer.toBinaryString(gpr[high & 0x0F]));
-                gpr[high & 0x0F] = ((gpr[high & 0x0F] & 0xFF) << 1) & 0xFF;
                 //debug(Integer.toBinaryString(gpr[high & 0x0F]));
                 break;
             default:
@@ -572,14 +597,35 @@ public class CHIP8 extends Application{
                 display[column][row] = false;
             }
         }
-        updateDisplay();
+        //updateDisplay();
+    }
+
+
+
+    private void debug(String s) {
+        if (DEBUG) System.out.println(s);
+    }
+
+    private void keyReleased(KeyEvent evt){
+        String ch = evt.getText();
+        for (int i = 0; i < mapping.length; i++)  {
+            if (mapping[i].compareTo(ch) == 0) {
+                debug("Released " + ch);
+                //Key released
+                numpad[i] = false;
+            }
+        }
     }
 
     private void keyPressed(KeyEvent evt){
-        String ch = evt.getCharacter();
-
+        String ch = evt.getText();
+        if (ch.compareTo(" ") == 0) {
+            reset();
+        }
+        //paused=true;
         for (int i = 0; i < mapping.length; i++)  {
-            if (mapping[i] == ch + "") {
+            if (mapping[i].compareTo(ch) == 0) {
+                debug("Pressed " + ch);
                 //Key pressed
                 numpad[i] = true;
             }
@@ -587,21 +633,6 @@ public class CHIP8 extends Application{
 
         if (ch.compareTo("p") == 0) {
             paused = !paused;
-        }
-    }
-
-    private void debug(String s) {
-        if (DEBUG) System.out.println(s);
-    }
-
-    private void keyReleased(KeyEvent evt){
-        String ch = evt.getCharacter();
-
-        for (int i = 0; i < mapping.length; i++)  {
-            if (mapping[i].compareTo(ch + "") == 0) {
-                //Key pressed
-                numpad[i] = false;
-            }
         }
     }
 }
