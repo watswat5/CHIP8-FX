@@ -16,6 +16,7 @@ import javafx.animation.KeyFrame;
 import javafx.util.Duration;
 import java.io.InputStream;
 import java.io.FileInputStream;
+import javax.sound.midi.*;
 
 /**
 *   Class representation of a CHIP8 computer.
@@ -71,6 +72,11 @@ public class CHIP8 extends Application{
     /**Used to pause execution for debugging.*/
     boolean paused;
 
+    /**Used for sound synthesis*/
+    private Synthesizer synthesizer;
+    private MidiChannel channel;
+    private boolean isBeeping;
+
     Scene mainScene;
     Canvas canvas;
 
@@ -87,6 +93,20 @@ public class CHIP8 extends Application{
             DEBUG = false;
         }
 
+        try {
+            synthesizer = MidiSystem.getSynthesizer();
+            synthesizer.open();
+            channel = synthesizer.getChannels()[0]; // Use the first MIDI channel
+            channel.controlChange(7, 127);//Set volume
+        } catch (MidiUnavailableException e) {
+            e.printStackTrace();
+        }
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            close();
+            debug("Shutdown hook triggered, MIDI closed.");
+        }));
+
         reset();
         stepTimer = new Timeline( new KeyFrame(Duration.seconds(1.0/frequency),(e) -> step()));
         stepTimer.setCycleCount(Timeline.INDEFINITE);
@@ -102,6 +122,12 @@ public class CHIP8 extends Application{
         mainScene.setOnKeyReleased( e -> keyReleased(e) );
         stage.show();
         stepTimer.play();
+    }
+
+    public void stop() {
+        // Ensure the MIDI synthesizer is closed when the app exits
+        close();
+        debug("Application stopped, MIDI closed.");
     }
 
     public void reset() {
@@ -131,6 +157,16 @@ public class CHIP8 extends Application{
 
         try {
             loadRom(rom);
+            /*
+            //Load st and repeat
+            ram[0x201] = 0x3c;
+            ram[0x200] = 0x60;
+            ram[0x203] = 0x18;
+            ram[0x202] = 0xF0;
+            ram[0x204] = 0x12;
+            ram[0x205] = 0x00;
+            */
+
         } catch (FileNotFoundException ex) {
             throw new RuntimeException("File not found!");
         }
@@ -150,6 +186,11 @@ public class CHIP8 extends Application{
             dt = dt > 0 ? (dt - 1) : 0;
             st = st > 0 ? (st - 1) : 0;
             updateDisplay();
+            if (st > 0) {
+                startBeeping();
+            } else {
+                stopBeeping();
+            }
             lastTime = System.currentTimeMillis();
         }
 
@@ -291,10 +332,10 @@ public class CHIP8 extends Application{
 
         //Keypad Skip
         if ((high  & 0xFF) >>> 4 == 0xE) {
-            for(boolean key : numpad) {
-                System.out.print("" + key + "\t");
-            }
-            System.out.println("\t Looking for " + gpr[(high & 0x0F)]);
+            //for(boolean key : numpad) {
+            //    System.out.print("" + key + "\t");
+            //}
+            //System.out.println("\t Looking for " + gpr[(high & 0x0F)]);
             //Skip Equal
             if ((low & 0xFF) == 0x9E) {
                 if (numpad[gpr[high & 0x0F]]) {
@@ -635,4 +676,23 @@ public class CHIP8 extends Application{
             paused = !paused;
         }
     }
+
+    public void startBeeping() {
+        System.out.println("Beeep");
+        isBeeping = true;
+        channel.noteOn(60, 80);
+    }
+
+    public void stopBeeping() {
+        isBeeping = false;
+        channel.noteOff(60); // Ensure the note stops immediately
+    }
+
+    public void close() {
+        if (synthesizer != null && synthesizer.isOpen()) {
+            synthesizer.close();
+            debug("Synth closed.");
+        }
+    }
+
 }
